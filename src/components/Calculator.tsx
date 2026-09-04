@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { isVaultCode, unlockVault } from "@/lib/vault";
 
@@ -11,21 +11,36 @@ export default function Calculator() {
   const [waitingForOperand, setWaitingForOperand] = useState(false);
   const [pendingSecondEqual, setPendingSecondEqual] = useState(false);
   const router = useRouter();
-  const equalTimeoutRef = useRef<number | null>(null);
+  const [equalTimeoutId, setEqualTimeoutId] = useState<number | null>(null);
+
+  const normalizeNumber = (value: number) => {
+    if (!Number.isFinite(value)) return "Error";
+    return String(Number.parseFloat(value.toPrecision(12)));
+  };
+
+  const calculate = (left: number, right: number, currentOperator: string) => {
+    switch (currentOperator) {
+      case "+": return left + right;
+      case "-": return left - right;
+      case "×": return left * right;
+      case "÷": return right === 0 ? Number.NaN : left / right;
+      default: return right;
+    }
+  };
 
   const inputDigit = (digit: string) => {
-    if (waitingForOperand) {
+    if (waitingForOperand || display === "Error") {
       setDisplay(digit);
       setWaitingForOperand(false);
     } else {
       setDisplay(display === "0" ? digit : display + digit);
     }
     setPendingSecondEqual(false);
-    if (equalTimeoutRef.current) window.clearTimeout(equalTimeoutRef.current);
+    if (equalTimeoutId) window.clearTimeout(equalTimeoutId);
   };
 
   const inputDot = () => {
-    if (waitingForOperand) {
+    if (waitingForOperand || display === "Error") {
       setDisplay("0.");
       setWaitingForOperand(false);
       return;
@@ -43,41 +58,38 @@ export default function Calculator() {
   };
 
   const toggleSign = () => {
+    if (display === "Error") return;
     const val = parseFloat(display);
-    setDisplay(String(-val));
+    setDisplay(normalizeNumber(-val));
     setPendingSecondEqual(false);
   };
 
   const inputPercent = () => {
+    if (display === "Error") return;
     const val = parseFloat(display);
-    setDisplay(String(val / 100));
+    setDisplay(normalizeNumber(val / 100));
     setPendingSecondEqual(false);
   };
 
   const performOperation = (nextOperator: string) => {
+    if (display === "Error") return;
     const inputValue = parseFloat(display);
+
+    // Pressing operators repeatedly changes the pending operator instead of
+    // calculating with the same operand twice.
+    if (waitingForOperand) {
+      setOperator(nextOperator);
+      return;
+    }
 
     if (prevValue == null) {
       setPrevValue(String(inputValue));
     } else if (operator) {
       const currentValue = parseFloat(prevValue);
-      let newValue = currentValue;
-      switch (operator) {
-        case "+":
-          newValue = currentValue + inputValue;
-          break;
-        case "-":
-          newValue = currentValue - inputValue;
-          break;
-        case "×":
-          newValue = currentValue * inputValue;
-          break;
-        case "÷":
-          newValue = currentValue / inputValue;
-          break;
-      }
-      setPrevValue(String(newValue));
-      setDisplay(String(newValue));
+      const newValue = calculate(currentValue, inputValue, operator);
+      const normalized = normalizeNumber(newValue);
+      setPrevValue(normalized);
+      setDisplay(normalized);
     }
     setWaitingForOperand(true);
     setOperator(nextOperator);
@@ -85,11 +97,12 @@ export default function Calculator() {
   };
 
   const handleEquals = () => {
+    if (display === "Error") return;
     // Vault unlock logic: display == vault code && press "=="
     if (isVaultCode(display)) {
       if (pendingSecondEqual) {
         // second = : unlock
-        if (equalTimeoutRef.current) window.clearTimeout(equalTimeoutRef.current);
+        if (equalTimeoutId) window.clearTimeout(equalTimeoutId);
         setPendingSecondEqual(false);
         unlockVault();
         router.push("/login");
@@ -98,25 +111,49 @@ export default function Calculator() {
         // first = : wait for second
         setPendingSecondEqual(true);
         // auto reset after 1.5s
-        if (equalTimeoutRef.current) window.clearTimeout(equalTimeoutRef.current);
-        equalTimeoutRef.current = window.setTimeout(() => {
+        if (equalTimeoutId) window.clearTimeout(equalTimeoutId);
+        setEqualTimeoutId(window.setTimeout(() => {
           setPendingSecondEqual(false);
           // normal equals behavior not needed for vault code, just keep display
-        }, 1500);
+        }, 1500));
         return;
       }
     }
 
     // normal calculator equals
     setPendingSecondEqual(false);
-    if (equalTimeoutRef.current) window.clearTimeout(equalTimeoutRef.current);
+    if (equalTimeoutId) window.clearTimeout(equalTimeoutId);
     if (operator && prevValue != null) {
-      performOperation("=");
+      const result = calculate(parseFloat(prevValue), parseFloat(display), operator);
+      const normalized = normalizeNumber(result);
+      if (normalized === "Error") {
+        setDisplay("Error");
+        setPrevValue(null);
+        setOperator(null);
+        setWaitingForOperand(false);
+        return;
+      }
+      setDisplay(normalized);
       setOperator(null);
       setPrevValue(null);
       setWaitingForOperand(true);
     }
   };
+
+  useEffect(() => {
+    const handleKeyboard = (event: KeyboardEvent) => {
+      if (/^[0-9]$/.test(event.key)) inputDigit(event.key);
+      else if (event.key === ".") inputDot();
+      else if (event.key === "Enter" || event.key === "=") handleEquals();
+      else if (event.key === "Escape") clearAll();
+      else if (event.key === "+" || event.key === "-" || event.key === "*" || event.key === "/") {
+        event.preventDefault();
+        performOperation(event.key === "*" ? "×" : event.key === "/" ? "÷" : event.key);
+      } else if (event.key === "%") inputPercent();
+    };
+    window.addEventListener("keydown", handleKeyboard);
+    return () => window.removeEventListener("keydown", handleKeyboard);
+  });
 
   const buttons: Array<{ label: string; className: string; onClick: () => void }> = [
     { label: "AC", className: "bg-[#a5a5a5] text-black", onClick: clearAll },
@@ -145,7 +182,7 @@ export default function Calculator() {
     if (display === "Error") return display;
     // don't format if contains operator hint
     const n = Number(display);
-    if (isNaN(n)) return display;
+    if (!Number.isFinite(n)) return "Error";
     // keep exact string for vault code (don't add commas if it's the code)
     if (isVaultCode(display)) return display;
     // limit length

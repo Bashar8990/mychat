@@ -1,5 +1,5 @@
 /* MyChat Calculator Vault - Service Worker */
-const VERSION = "v1.0.4";
+const VERSION = "v1.0.5";
 const CACHE_NAME = "calc-vault-" + VERSION;
 const APP_SHELL = [
   "/",
@@ -29,6 +29,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  // Never cache Supabase/Auth responses or any cross-origin data. This keeps
+  // chat data out of the service-worker cache and avoids serving stale user data.
+  if (new URL(request.url).origin !== self.location.origin) return;
 
   // Network-first for navigations (HTML) so updates show
   if (request.mode === "navigate" || request.headers.get("accept")?.includes("text/html")) {

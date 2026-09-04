@@ -1,7 +1,7 @@
 {
-  "name": "Calculator",
-  "short_name": "Calculator",
-  "description": "A simple calculator",
+  "name": "MyChat",
+  "short_name": "MyChat",
+  "description": "دردشة عائلية خاصة وبسيطة",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/",

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,13 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Calculator",
-  description: "Calculator - Simple and elegant",
+  title: {
+    default: "MyChat",
+    template: "%s | MyChat",
+  },
+  description: "دردشة عائلية خاصة وبسيطة",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Calculator",
+    title: "MyChat",
   },
 };
 
@@ -41,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col bg-[#1c1c1e]">
         {children}
+        <InstallPrompt />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -53,12 +58,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   });
                 });
               }
-              var deferredPrompt;
-              window.addEventListener('beforeinstallprompt', function(e){
-                e.preventDefault();
-                deferredPrompt = e;
-                console.log('beforeinstallprompt captured');
-              });
             `,
           }}
         />

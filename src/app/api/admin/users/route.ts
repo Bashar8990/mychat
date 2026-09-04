@@ -1,0 +1,92 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+type CreateUserRequest = {
+  username?: string;
+  displayName?: string;
+  password?: string;
+};
+
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRoleKey) return null;
+  return createClient(url, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+async function getRequestUser(request: Request) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const authorization = request.headers.get("authorization");
+  if (!url || !anonKey || !authorization?.startsWith("Bearer ")) return null;
+
+  const authClient = createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } });
+  const { data, error } = await authClient.auth.getUser(authorization.slice(7));
+  return error || !data.user ? null : data.user;
+}
+
+function validateUserInput(body: CreateUserRequest) {
+  const username = body.username?.trim().toLowerCase() || "";
+  const displayName = body.displayName?.trim() || "";
+  const password = body.password || "";
+  if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(username)) return { error: "اسم المستخدم يجب أن يكون 3-32 رمزًا إنجليزيًا." };
+  if (displayName.length < 2 || displayName.length > 80) return { error: "الاسم الظاهر يجب أن يكون بين حرفين و80 حرفًا." };
+  if (password.length < 8) return { error: "كلمة السر يجب أن تحتوي على 8 أحرف على الأقل." };
+  return { username, displayName, password };
+}
+
+export async function POST(request: Request) {
+  const adminClient = getAdminClient();
+  if (!adminClient) return NextResponse.json({ error: "إعدادات الخادم غير مكتملة." }, { status: 500 });
+
+  const requestUser = await getRequestUser(request);
+  if (!requestUser) return NextResponse.json({ error: "يجب تسجيل الدخول أولًا." }, { status: 401 });
+
+  const { data: adminProfile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", requestUser.id)
+    .single();
+  if (profileError || adminProfile?.role !== "admin") return NextResponse.json({ error: "هذه العملية متاحة للمدير فقط." }, { status: 403 });
+
+  let body: CreateUserRequest;
+  try {
+    body = await request.json() as CreateUserRequest;
+  } catch {
+    return NextResponse.json({ error: "البيانات غير صالحة." }, { status: 400 });
+  }
+  const input = validateUserInput(body);
+  if ("error" in input) return NextResponse.json({ error: input.error }, { status: 400 });
+
+  const email = `${input.username}@mychat.local`;
+  const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { username: input.username, display_name: input.displayName },
+  });
+  if (createError || !created.user) {
+    const duplicate = createError?.message.toLowerCase().includes("already") || createError?.message.toLowerCase().includes("exist");
+    return NextResponse.json({ error: duplicate ? "اسم المستخدم مستخدم مسبقًا." : "تعذر إنشاء المستخدم." }, { status: duplicate ? 409 : 400 });
+  }
+
+  const { data: profile, error: profileUpsertError } = await adminClient
+    .from("profiles")
+    .upsert({ auth_user_id: created.user.id, username: input.username, display_name: input.displayName, role: "member" }, { onConflict: "username" })
+    .select("id, username, display_name, role, avatar_url")
+    .single();
+  if (profileUpsertError || !profile) {
+    await adminClient.auth.admin.deleteUser(created.user.id);
+    return NextResponse.json({ error: "تعذر تجهيز ملف المستخدم." }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    user: {
+      id: profile.id,
+      username: profile.username,
+      displayName: profile.display_name,
+      role: profile.role,
+      avatarUrl: profile.avatar_url,
+    },
+  }, { status: 201 });
+}
