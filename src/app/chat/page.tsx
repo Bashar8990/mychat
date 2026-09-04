@@ -131,10 +131,10 @@ export default function ChatPage() {
 
       // P2P images via broadcast (ephemeral, no DB) - same channel for all
       const imgName = `p2p:${actualConvId}`;
-      imgChan = supabase.channel(imgName, { config: { broadcast: { self: true } } });
+      imgChan = supabase.channel(imgName, { config: { broadcast: { self: false } } });
       imgChan.on("broadcast", { event: "image" }, (payload: any) => {
         const msg = payload.payload as ImageMessage;
-        setP2pImages((prev) => [...prev, msg]);
+        setP2pImages((prev) => (prev.find((x) => x.id === msg.id) ? prev : [...prev, msg]));
       });
       imgChan.subscribe();
       imageChannelRef.current = imgChan;
