@@ -37,13 +37,29 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1c1c1e" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
+        <link rel="apple-touch-icon" href="/icon-180.png" />
       </head>
       <body className="min-h-full flex flex-col bg-[#1c1c1e]">
         {children}
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+            __html: `
+              if('serviceWorker' in navigator){
+                window.addEventListener('load',function(){
+                  navigator.serviceWorker.register('/sw.js').then(function(reg){
+                    console.log('SW registered:', reg.scope);
+                  }).catch(function(err){
+                    console.log('SW register failed:', err);
+                  });
+                });
+              }
+              var deferredPrompt;
+              window.addEventListener('beforeinstallprompt', function(e){
+                e.preventDefault();
+                deferredPrompt = e;
+                console.log('beforeinstallprompt captured');
+              });
+            `,
           }}
         />
       </body>
