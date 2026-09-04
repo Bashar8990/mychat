@@ -118,8 +118,8 @@ export default function ChatPage() {
         });
         setMessages(enriched as any);
       }
-      // realtime for messages - create channel, add callbacks BEFORE subscribe
-      const channelName = `messages:${actualConvId}:${me.id}`;
+      // realtime for messages - same channel name for all participants
+      const channelName = `messages:${actualConvId}`;
       chan = supabase.channel(channelName);
       chan.on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${actualConvId}` }, async (payload: any) => {
         const m = payload.new as TextMessage;
@@ -129,9 +129,9 @@ export default function ChatPage() {
       chan.subscribe();
       channelRef.current = chan;
 
-      // P2P images via broadcast (ephemeral, no DB)
-      const imgName = `p2p:${actualConvId}:${me.id}`;
-      imgChan = supabase.channel(imgName, { config: { broadcast: { self: false } } });
+      // P2P images via broadcast (ephemeral, no DB) - same channel for all
+      const imgName = `p2p:${actualConvId}`;
+      imgChan = supabase.channel(imgName, { config: { broadcast: { self: true } } });
       imgChan.on("broadcast", { event: "image" }, (payload: any) => {
         const msg = payload.payload as ImageMessage;
         setP2pImages((prev) => [...prev, msg]);
