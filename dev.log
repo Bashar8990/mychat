@@ -1,0 +1,17 @@
+▲ Next.js 16.3.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://0.0.0.0:3000
+- Environments: .env.local
+✓ Ready in 751ms
+✓ Running next.config.ts took 80ms
+
+ GET /chat 200 in 1134ms (next.js: 558ms, application-code: 576ms)
+ GET /chat 200 in 95ms (next.js: 11ms, application-code: 84ms)
+ GET /chat 200 in 73ms (next.js: 6ms, application-code: 67ms)
+ GET /chat 200 in 64ms (next.js: 6ms, application-code: 58ms)
+ GET /chat 200 in 64ms (next.js: 8ms, application-code: 56ms)
+ GET / 200 in 113ms (next.js: 36ms, application-code: 77ms)
+ GET / 200 in 38ms (next.js: 7ms, application-code: 31ms)
+ GET /login 200 in 62ms (next.js: 29ms, application-code: 33ms)
+ GET /chat 200 in 114ms (next.js: 14ms, application-code: 100ms)
+ GET /chat 200 in 59ms (next.js: 12ms, application-code: 47ms)
