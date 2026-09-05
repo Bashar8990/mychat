@@ -33,7 +33,8 @@ export default function Calculator() {
       setDisplay(digit);
       setWaitingForOperand(false);
     } else {
-      setDisplay(display === "0" ? digit : display + digit);
+      // Preserve leading zeros so a vault code such as "0000" can be entered.
+      setDisplay(display === "0" && digit === "0" ? "00" : display === "0" ? digit : display + digit);
     }
     setPendingSecondEqual(false);
     if (equalTimeoutId) window.clearTimeout(equalTimeoutId);
