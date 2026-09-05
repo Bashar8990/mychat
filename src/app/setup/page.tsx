@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 export default function SetupPage() {
   const router = useRouter();
-  const [setupKey, setSetupKey] = useState("");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +25,7 @@ export default function SetupPage() {
       const response = await fetch("/api/admin/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ setupKey, username, displayName, password }),
+        body: JSON.stringify({ username, displayName, password }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) {
@@ -53,7 +52,6 @@ export default function SetupPage() {
           </div>
         ) : (
           <form onSubmit={createAdmin} className="space-y-4">
-            <Field label="مفتاح الإعداد" value={setupKey} onChange={setSetupKey} type="password" required />
             <Field label="اسم المستخدم" value={username} onChange={setUsername} placeholder="admin" required />
             <Field label="الاسم الظاهر" value={displayName} onChange={setDisplayName} placeholder="مدير العائلة" required />
             <Field label="كلمة السر" value={password} onChange={setPassword} type="password" minLength={8} required />

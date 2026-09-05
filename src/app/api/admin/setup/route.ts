@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-type SetupRequest = { setupKey?: string; username?: string; displayName?: string; password?: string };
+type SetupRequest = { username?: string; displayName?: string; password?: string };
 
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const setupKey = process.env.INITIAL_ADMIN_SETUP_KEY;
-  if (!url || !serviceRoleKey || !setupKey) return NextResponse.json({ error: "إعدادات الإعداد الأولي غير مكتملة." }, { status: 500 });
+  if (!url || !serviceRoleKey) return NextResponse.json({ error: "إعدادات الخادم غير مكتملة." }, { status: 500 });
 
   let body: SetupRequest;
   try {
@@ -15,7 +14,6 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "البيانات غير صالحة." }, { status: 400 });
   }
-  if (!body.setupKey || body.setupKey !== setupKey) return NextResponse.json({ error: "مفتاح الإعداد غير صحيح." }, { status: 403 });
   const username = body.username?.trim().toLowerCase() || "";
   const displayName = body.displayName?.trim() || "";
   const password = body.password || "";
