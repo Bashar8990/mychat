@@ -7,6 +7,8 @@ type CreateUserRequest = {
   password?: string;
 };
 
+type DeleteUserRequest = { profileId?: string };
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +43,6 @@ export async function POST(request: Request) {
 
   const requestUser = await getRequestUser(request);
   if (!requestUser) return NextResponse.json({ error: "يجب تسجيل الدخول أولًا." }, { status: 401 });
-
   const { data: adminProfile, error: profileError } = await adminClient
     .from("profiles")
     .select("role")
@@ -89,4 +90,46 @@ export async function POST(request: Request) {
       avatarUrl: profile.avatar_url,
     },
   }, { status: 201 });
+}
+
+export async function DELETE(request: Request) {
+  const adminClient = getAdminClient();
+  if (!adminClient) return NextResponse.json({ error: "إعدادات الخادم غير مكتملة." }, { status: 500 });
+
+  const requestUser = await getRequestUser(request);
+  if (!requestUser) return NextResponse.json({ error: "يجب تسجيل الدخول أولًا." }, { status: 401 });
+  const { data: adminProfile, error: adminProfileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("auth_user_id", requestUser.id)
+    .single();
+  if (adminProfileError || adminProfile?.role !== "admin") return NextResponse.json({ error: "هذه العملية متاحة للمدير فقط." }, { status: 403 });
+
+  let body: DeleteUserRequest;
+  try {
+    body = await request.json() as DeleteUserRequest;
+  } catch {
+    return NextResponse.json({ error: "البيانات غير صالحة." }, { status: 400 });
+  }
+  if (!body.profileId) return NextResponse.json({ error: "المستخدم المطلوب غير محدد." }, { status: 400 });
+
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("id, auth_user_id, role")
+    .eq("id", body.profileId)
+    .single();
+  if (profileError || !profile) return NextResponse.json({ error: "المستخدم غير موجود." }, { status: 404 });
+  if (profile.role === "admin" || profile.auth_user_id === requestUser.id) {
+    return NextResponse.json({ error: "لا يمكن حذف المدير الحالي." }, { status: 400 });
+  }
+
+  if (profile.auth_user_id) {
+    const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(profile.auth_user_id);
+    if (deleteAuthError) return NextResponse.json({ error: "تعذر حذف حساب المستخدم." }, { status: 400 });
+  } else {
+    const { error: deleteProfileError } = await adminClient.from("profiles").delete().eq("id", profile.id);
+    if (deleteProfileError) return NextResponse.json({ error: "تعذر حذف المستخدم." }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

@@ -69,6 +69,7 @@ export default function ChatPage() {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserPasswordConfirm, setNewUserPasswordConfirm] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [privateConvMap, setPrivateConvMap] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -352,6 +353,31 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteUser = async (user: LocalUser) => {
+    if (!me || user.id === me.id || user.role === "admin" || deletingUserId) return;
+    if (!window.confirm(`هل تريد حذف المستخدم ${user.displayName}؟`)) return;
+    setDeletingUserId(user.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("انتهت جلسة الدخول. سجّل الدخول مرة أخرى.");
+      const response = await fetch("/api/admin/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ profileId: user.id }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "تعذر حذف المستخدم.");
+      setUsers((previous) => previous.filter((item) => item.id !== user.id));
+      if (selectedId === user.id) setSelectedId(FAMILY_GROUP_ID);
+      setNotice("تم حذف المستخدم.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "تعذر حذف المستخدم.");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !me || sendingImage) return;
@@ -429,9 +455,9 @@ export default function ChatPage() {
       : selectedUser && onlineUserIds.includes(selectedUser.id) ? "متصل الآن" : "غير متصل الآن";
 
   return (
-    <div className="h-[100dvh] flex bg-white" dir="rtl">
-      <div className="w-[320px] border-l border-zinc-200 flex-col bg-zinc-50 hidden md:flex">
-        <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 bg-white">
+    <div className="h-[100svh] max-h-[100svh] min-h-0 overflow-hidden flex bg-white" dir="rtl">
+      <div className="w-[320px] min-h-0 border-l border-zinc-200 flex-col bg-zinc-50 hidden md:flex">
+        <div className="h-16 shrink-0 flex items-center justify-between px-4 border-b border-zinc-200 bg-white">
           <div className="font-bold text-black">الدردشات</div>
           <div className="text-xs text-zinc-500">{me.displayName}</div>
         </div>
@@ -459,8 +485,8 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="h-16 border-b border-zinc-200 flex items-center justify-between px-4 bg-white">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="h-16 shrink-0 border-b border-zinc-200 flex items-center justify-between px-4 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center text-sm">{selectedId === FAMILY_GROUP_ID ? "👨‍👩‍👧‍👦" : selectedUser?.displayName[0]}</div>
             <div>
@@ -468,7 +494,8 @@ export default function ChatPage() {
             <div className={`text-xs ${connectionStatus === "connected" ? "text-green-600" : connectionStatus === "connecting" ? "text-amber-600" : "text-red-600"}`} aria-live="polite">{connectionLabel}</div>
           </div>
           </div>
-          <div className="flex gap-2 md:hidden">
+          <div className="flex items-center gap-2 md:hidden">
+            {me.role === "admin" && <button onClick={() => setShowSettings((value) => !value)} className="h-9 px-3 rounded-xl border border-zinc-200 text-sm text-black" aria-label="إعدادات المدير">⚙️</button>}
             <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="h-9 rounded-xl border border-zinc-200 px-2 text-sm text-black">
               <option value={FAMILY_GROUP_ID}>جروب العائلة</option>
               {users.filter((u) => u.id !== me.id).map((u) => (<option key={u.id} value={u.id}>{u.displayName}</option>))}
@@ -482,8 +509,8 @@ export default function ChatPage() {
         </div>}
 
         {showSettings && me.role === "admin" && (
-          <div className="p-4 bg-amber-50 border-b border-amber-200">
-            <div className="text-sm font-semibold text-black mb-2">تغيير الرمز السري</div>
+          <div className="max-h-[45svh] overflow-y-auto shrink-0 p-4 bg-amber-50 border-b border-amber-200">
+            <div className="text-sm font-semibold text-black mb-2">إعدادات المدير</div>
             <div className="flex gap-2">
               <input value={newCode} onChange={(e) => setNewCode(e.target.value.replace(/\D/g, ""))} className="flex-1 h-10 rounded-xl border border-zinc-300 px-3 text-black" placeholder="2025147151" />
               <button onClick={() => { if (newCode.length < 4) { setNotice("الرمز يجب أن يحتوي على 4 أرقام على الأقل."); return; } setVaultCode(newCode); setNotice("تم حفظ الرمز على هذا الجهاز."); }} className="h-10 px-4 rounded-xl bg-black text-white text-sm">حفظ</button>
@@ -498,11 +525,26 @@ export default function ChatPage() {
                 <input value={newUserPasswordConfirm} onChange={(event) => setNewUserPasswordConfirm(event.target.value)} type="password" placeholder="تأكيد كلمة السر" minLength={8} required className="h-10 rounded-xl border border-zinc-300 px-3 text-black" />
                 <button disabled={creatingUser} className="h-10 rounded-xl bg-black text-white text-sm sm:col-span-2 disabled:opacity-50">{creatingUser ? "جار إنشاء المستخدم…" : "إنشاء المستخدم"}</button>
               </form>
+              <div className="mt-5 border-t border-amber-200 pt-4">
+                <div className="text-sm font-semibold text-black mb-2">المستخدمون</div>
+                <div className="space-y-2">
+                  {users.filter((user) => user.id !== me.id).map((user) => (
+                    <div key={user.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-black truncate">{user.displayName}</div>
+                        <div className="text-xs text-zinc-500 truncate">@{user.username}</div>
+                      </div>
+                      {user.role !== "admin" && <button type="button" onClick={() => void handleDeleteUser(user)} disabled={deletingUserId === user.id} className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-700 disabled:opacity-50">{deletingUserId === user.id ? "جار الحذف…" : "حذف"}</button>}
+                    </div>
+                  ))}
+                  {users.filter((user) => user.id !== me.id).length === 0 && <div className="text-xs text-zinc-500">لا يوجد مستخدمون آخرون.</div>}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        <div className="flex-1 overflow-auto p-4 space-y-3 bg-[#ece5dd]">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3 bg-[#ece5dd]">
           {combined.length === 0 && <div className="text-center text-sm text-zinc-500 mt-10">لا توجد رسائل بعد. جرب الإرسال وستظهر فوراً على كل الأجهزة 👋</div>}
           {combined.map((m) => {
             const isMe = m.sender_id === me.id;
@@ -538,13 +580,13 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="p-3 border-t border-zinc-200 bg-white flex items-center gap-2">
+        <div className="shrink-0 p-3 border-t border-zinc-200 bg-white flex items-center gap-2">
           <button onClick={() => fileRef.current?.click()} disabled={sendingImage || connectionStatus !== "connected"} className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-black hover:bg-zinc-200 disabled:opacity-50" title="إرسال صورة" aria-label="إرسال صورة">{sendingImage ? `${imageProgress}%` : "📷"}</button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }} placeholder="اكتب رسالة..." className="flex-1 h-11 rounded-full border border-zinc-200 px-4 text-black outline-none focus:border-black bg-zinc-50" />
           <button onClick={handleSend} disabled={sendingText || connectionStatus !== "connected"} className="w-11 h-11 rounded-full bg-[#075e54] text-white flex items-center justify-center disabled:opacity-50" aria-label="إرسال الرسالة">{sendingText ? "…" : "➤"}</button>
         </div>
-        <div className="text-center text-[11px] text-zinc-500 bg-white pb-2">النصوص محفوظة • الصور مؤقتة ولا تُحفظ إلا عند تنزيلها</div>
+        <div className="shrink-0 text-center text-[11px] text-zinc-500 bg-white pb-2">النصوص محفوظة • الصور مؤقتة ولا تُحفظ إلا عند تنزيلها</div>
       </div>
     </div>
   );
