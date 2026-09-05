@@ -535,6 +535,7 @@ export default function ChatPage() {
           </div>
           <div className="flex items-center gap-2 md:hidden">
             {me.role === "admin" && <button onClick={() => setShowSettings((value) => !value)} className="h-9 px-3 rounded-xl border border-zinc-200 text-sm text-black" aria-label="إعدادات المدير">⚙️</button>}
+            <button onClick={handleLogout} className="h-9 px-3 rounded-xl border border-zinc-200 text-xs text-black" aria-label="تسجيل الخروج">خروج</button>
             <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="h-9 rounded-xl border border-zinc-200 px-2 text-sm text-black">
               <option value={FAMILY_GROUP_ID}>جروب العائلة</option>
               {users.filter((u) => u.id !== me.id).map((u) => (<option key={u.id} value={u.id}>{u.displayName}</option>))}
