@@ -322,6 +322,22 @@ export default function ChatPage() {
   const handleSend = async () => {
     if (!input.trim() || !me || sendingText) return;
     const text = input.trim();
+    const { data: membership } = await supabase
+      .from("conversation_participants")
+      .select("user_id")
+      .eq("conversation_id", actualConvId)
+      .eq("user_id", me.id)
+      .maybeSingle();
+    if (!membership) {
+      const { error: membershipError } = await supabase
+        .from("conversation_participants")
+        .insert({ conversation_id: actualConvId, user_id: me.id });
+      if (membershipError && membershipError.code !== "23505") {
+        console.error("Message membership error:", membershipError);
+        setNotice("تعذر تجهيز عضويتك في المحادثة. أعد فتح المحادثة ثم حاول مرة أخرى.");
+        return;
+      }
+    }
     setInput("");
     const temporaryId = `sending-${Date.now()}`;
     setSendingText(true);
