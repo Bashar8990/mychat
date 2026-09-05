@@ -108,16 +108,27 @@ export default function ChatPage() {
 
   // Resolve actual conversation id (family or private)
   const getActualConversationId = useCallback(async (selected: string): Promise<string> => {
+    if (!me) return selected;
     if (selected === FAMILY_GROUP_ID) {
       const { data: family } = await supabase.from("conversations").select("id").eq("id", FAMILY_GROUP_ID).maybeSingle();
       if (!family) {
         const { error } = await supabase.from("conversations").insert({ id: FAMILY_GROUP_ID, is_group: true, group_name: "جروب العائلة" });
         if (error && error.code !== "23505") console.error("Family conversation setup error:", error);
       }
-      await supabase.from("conversation_participants").upsert({ conversation_id: FAMILY_GROUP_ID, user_id: me?.id }, { onConflict: "conversation_id,user_id" });
+      const { data: familyMembership } = await supabase
+        .from("conversation_participants")
+        .select("user_id")
+        .eq("conversation_id", FAMILY_GROUP_ID)
+        .eq("user_id", me.id)
+        .maybeSingle();
+      if (!familyMembership) {
+        const { error: membershipError } = await supabase
+          .from("conversation_participants")
+          .insert({ conversation_id: FAMILY_GROUP_ID, user_id: me.id });
+        if (membershipError && membershipError.code !== "23505") console.error("Family membership error:", membershipError);
+      }
       return FAMILY_GROUP_ID;
     }
-    if (!me) return selected;
     // private: check cache
     if (privateConvMap[selected]) return privateConvMap[selected];
     const directKey = [me.id, selected].sort().join(":");
@@ -151,7 +162,19 @@ export default function ChatPage() {
       console.error(error);
       return selected;
     }
-    await supabase.from("conversation_participants").insert([{ conversation_id: conv.id, user_id: me.id }, { conversation_id: conv.id, user_id: selected }]);
+    const { error: ownerMembershipError } = await supabase
+      .from("conversation_participants")
+      .insert({ conversation_id: conv.id, user_id: me.id });
+    if (ownerMembershipError && ownerMembershipError.code !== "23505") {
+      console.error("Conversation owner membership error:", ownerMembershipError);
+      return selected;
+    }
+    const { error: selectedMembershipError } = await supabase
+      .from("conversation_participants")
+      .insert({ conversation_id: conv.id, user_id: selected });
+    if (selectedMembershipError && selectedMembershipError.code !== "23505") {
+      console.error("Conversation participant membership error:", selectedMembershipError);
+    }
     setPrivateConvMap((prev) => ({ ...prev, [selected]: conv.id }));
     return conv.id;
   }, [me, privateConvMap]);

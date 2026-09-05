@@ -123,6 +123,23 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "لا يمكن حذف المدير الحالي." }, { status: 400 });
   }
 
+  const { data: memberships, error: membershipsError } = await adminClient
+    .from("conversation_participants")
+    .select("conversation_id, conversations!inner(is_group)")
+    .eq("user_id", profile.id);
+  if (membershipsError) return NextResponse.json({ error: "تعذر تجهيز محادثات المستخدم للحذف." }, { status: 500 });
+
+  const privateConversationIds = (memberships || [])
+    .filter((membership) => !(membership.conversations as { is_group?: boolean } | null)?.is_group)
+    .map((membership) => membership.conversation_id);
+  if (privateConversationIds.length > 0) {
+    const { error: conversationsError } = await adminClient
+      .from("conversations")
+      .delete()
+      .in("id", privateConversationIds);
+    if (conversationsError) return NextResponse.json({ error: "تعذر حذف محادثات المستخدم." }, { status: 500 });
+  }
+
   if (profile.auth_user_id) {
     const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(profile.auth_user_id);
     if (deleteAuthError) return NextResponse.json({ error: "تعذر حذف حساب المستخدم." }, { status: 400 });

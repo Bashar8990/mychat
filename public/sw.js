@@ -1,5 +1,5 @@
 /* MyChat Calculator Vault - Service Worker */
-const VERSION = "v1.0.7";
+const VERSION = "v1.0.8";
 const CACHE_NAME = "calc-vault-" + VERSION;
 const APP_SHELL = [
   "/",
