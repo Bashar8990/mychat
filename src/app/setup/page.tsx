@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function SetupPage() {
@@ -12,6 +12,27 @@ export default function SetupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [configured, setConfigured] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/setup/status", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("status");
+        return await response.json() as { configured?: boolean };
+      })
+      .then((status) => {
+        if (!cancelled) setConfigured(Boolean(status.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setError("تعذر التحقق من حالة الإعداد.");
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const createAdmin = async (event: FormEvent) => {
     event.preventDefault();
@@ -45,7 +66,14 @@ export default function SetupPage() {
       <section className="w-full max-w-sm bg-white rounded-[20px] p-6 shadow-xl">
         <h1 className="text-center text-2xl font-bold text-black">الإعداد الأولي</h1>
         <p className="text-center text-sm text-zinc-500 mt-1 mb-6">أنشئ مدير العائلة مرة واحدة</p>
-        {done ? (
+        {checking ? (
+          <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-600" role="status">جار التحقق من حالة الإعداد…</div>
+        ) : configured ? (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-700" role="status">تم إعداد المدير مسبقًا. لا يمكن إنشاء مدير آخر.</div>
+            <button onClick={() => router.push("/login")} className="w-full h-12 rounded-xl bg-black text-white font-semibold">الانتقال لتسجيل الدخول</button>
+          </div>
+        ) : done ? (
           <div className="space-y-4">
             <div className="rounded-xl bg-green-50 p-4 text-sm text-green-800" role="status">تم إنشاء المدير بنجاح.</div>
             <button onClick={() => router.push("/login")} className="w-full h-12 rounded-xl bg-black text-white font-semibold">الانتقال لتسجيل الدخول</button>

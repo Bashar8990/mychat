@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [setupAvailable, setSetupAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,7 +22,18 @@ export default function LoginPage() {
         router.replace("/");
         return;
       }
-      if (await getSession()) router.replace("/chat");
+      const [session, setupResponse] = await Promise.all([
+        getSession(),
+        fetch("/api/admin/setup/status", { cache: "no-store" }),
+      ]);
+      if (session) {
+        router.replace("/chat");
+        return;
+      }
+      if (setupResponse.ok) {
+        const setupStatus = await setupResponse.json() as { configured?: boolean };
+        if (!cancelled) setSetupAvailable(!setupStatus.configured);
+      }
       if (!cancelled) setLoading(false);
     };
     checkSession();
@@ -102,12 +114,14 @@ export default function LoginPage() {
         >
           رجوع للآلة الحاسبة
         </button>
-        <button
-          onClick={() => router.push("/setup")}
-          className="mt-3 w-full text-xs text-zinc-400 hover:text-black"
-        >
-          إعداد أول مدير
-        </button>
+        {setupAvailable && (
+          <button
+            onClick={() => router.push("/setup")}
+            className="mt-3 w-full text-xs text-zinc-400 hover:text-black"
+          >
+            إعداد أول مدير
+          </button>
+        )}
       </div>
     </div>
   );
